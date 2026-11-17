@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-16T08:39:26Z"
+    "generatedAt": "2026-11-17T08:25:03Z"
   },
   "providers": {
     "anthropic": {
@@ -13698,7 +13698,7 @@
             "cacheRead": "0.2"
           },
           "limits": {
-            "context": 1000000,
+            "context": 1048576,
             "output": 262144
           },
           "modalities": {
@@ -16962,6 +16962,43 @@
             "temperature": true
           }
         },
+        "Qwen/Qwen4-Max": {
+          "name": "Qwen4 Max",
+          "released": "2026-11-16",
+          "rates": {
+            "input": "1.413",
+            "output": "4.24",
+            "cacheRead": "0.071"
+          },
+          "limits": {
+            "context": 1000000,
+            "output": 262144
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
         "XiaomiMiMo/MiMo-V2.5": {
           "name": "MiMo-V2.5",
           "status": "deprecated",
@@ -18094,7 +18131,8 @@
           "released": "2025-08-05",
           "rates": {
             "input": "0.037",
-            "output": "0.17"
+            "output": "0.17",
+            "cacheRead": "0.0185"
           },
           "limits": {
             "context": 131072,
@@ -18127,7 +18165,8 @@
           "released": "2025-08-05",
           "rates": {
             "input": "0.03",
-            "output": "0.14"
+            "output": "0.14",
+            "cacheRead": "0.015"
           },
           "limits": {
             "context": 131072,
@@ -26537,6 +26576,31 @@
             "temperature": true
           }
         },
+        "zai-org/GLM-4.5": {
+          "name": "GLM-4.5",
+          "released": "2025-07-28",
+          "rates": {
+            "input": "0.6",
+            "output": "2.2"
+          },
+          "limits": {
+            "context": 131072,
+            "output": 98304
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolCall": true,
+            "temperature": true
+          }
+        },
         "zai-org/GLM-4.5-Air": {
           "name": "GLM-4.5-Air",
           "released": "2025-07-28",
@@ -26602,6 +26666,32 @@
           "modalities": {
             "input": [
               "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolCall": true,
+            "temperature": true
+          }
+        },
+        "zai-org/GLM-4.6V": {
+          "name": "GLM-4.6V",
+          "released": "2025-12-08",
+          "rates": {
+            "input": "0.3",
+            "output": "0.9"
+          },
+          "limits": {
+            "context": 131072,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
             ],
             "output": [
               "text"
