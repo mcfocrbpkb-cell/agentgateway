@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# MCF AI-KU integration baseline.
+# Replace the marked endpoints/credentials with MCF-owned deployment values.
+# This file does not replace native Agentgateway capabilities; it layers
+# MCF authentication, external authorization and enterprise guardrails on top.
+
+gateways:
+  default:
+    port: 3000
+    jwtAuth:
+      mode: strict
+      issuer: https://ai-ku.mcf.example/
+      audiences:
+      - mcf-ai-ku
+      jwks:
+        url: https://ai-ku.mcf.example/.well-known/jwks.json
+
+routes:
+- matches:
+  - path:
+      pathPrefix: /
+  policies:
+    extAuth:
+      host: ai-ku.mcf.example:443
+      failureMode: FailClosed
+      forwardBody:
+        maxSize: 64Ki
+      policies:
+        backendTLS:
+          hostname: ai-ku.mcf.example
+          root: /etc/mcf/certs/ai-ku-ca.pem
+        http:
+          requestTimeout: "5s"
+      http:
+        path: '"/v1/authorize"'
+        allowedRequestHeaders:
+        - authorization
+        - x-mcf-project-id
+        - x-mcf-department-id
+        - x-mcf-team-id
+        addRequestHeaders:
+          x-mcf-gateway: '"agentgateway"'
+          x-user: jwt.sub
+          x-tenant: jwt.mcf.tenant_id
+        allowedResponseHeaders:
+        - x-mcf-decision-id
+        - x-mcf-policy-version
+        responseMetadata:
+          decision_id: response.headers["x-mcf-decision-id"]
+          policy_version: response.headers["x-mcf-policy-version"]
+  backends:
+  - ai:
+      name: mcf-provider
+      provider:
+        openAI:
+          model: gpt-4o-mini
+          params:
+            apiKey: "$OPENAI_API_KEY"
+      promptGuard:
+        # IMPORTANT:
+        # MCF strict response guardrails are deliberately non-streaming.
+        # Agentgateway's streaming guardrail mode evaluates bounded windows
+        # and cannot recall already-emitted text. Full-response inspection
+        # therefore runs on the buffered/non-streaming execution path.
+        request:
+        - webhook:
+            backendRef:
+              name: mcf-ai-ku-guardrails
+              port: 8443
+            failureMode: FailClosed
+            headers:
+              x-user: jwt.sub
+              x-tenant: jwt.mcf.tenant_id
+              x-mcf-gateway: '"agentgateway"'
+              ":path": '"/v1/guardrails/request"'
+        response:
+        - webhook:
+            backendRef:
+              name: mcf-ai-ku-guardrails
+              port: 8443
+            failureMode: FailClosed
+            headers:
+              x-user: jwt.sub
+              x-tenant: jwt.mcf.tenant_id
+              x-mcf-gateway: '"agentgateway"'
+              ":path": '"/v1/guardrails/response"'
+      routes:
+        "/v1/chat/completions": CHAT
+        "/v1/responses": CHAT
+
+# The webhook backend is represented as a normal HTTPS backend so its
+# certificate policy can be managed independently from the LLM provider.
+# Point the host/port at the MCF AI-KU guardrail endpoint in the actual
+# on-prem network.
