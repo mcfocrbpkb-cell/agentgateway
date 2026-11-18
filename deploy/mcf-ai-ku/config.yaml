@@ -83,6 +83,9 @@ llm:
             x-user: jwt.sub
             x-tenant: jwt.mcf.tenant_id
             x-mcf-gateway: '"agentgateway"'
+            x-mcf-project-id: request.headers["x-mcf-project-id"]
+            x-mcf-department-id: request.headers["x-mcf-department-id"]
+            x-mcf-team-id: request.headers["x-mcf-team-id"]
             ":path": '"/v1/guardrails/request"'
       response:
       - webhook:
