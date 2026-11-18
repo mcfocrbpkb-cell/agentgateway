@@ -4160,6 +4160,19 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn apply_llm_request_policies_preserves_full_streaming_guardrail_mode() {
+		let policies =
+			response_prompt_guards_for_streaming_mode(PromptGuardStreamingMode::Full).await;
+
+		assert_eq!(policies.prompt_guard.len(), 1);
+		assert!(policies.streaming_prompt_guard_enabled);
+		assert_eq!(
+			policies.streaming_prompt_guard_mode,
+			PromptGuardStreamingMode::Full
+		);
+	}
+
+	#[tokio::test]
 	async fn apply_llm_request_policies_includes_streaming_guardrails_when_enabled() {
 		let policies =
 			response_prompt_guards_for_streaming_mode(PromptGuardStreamingMode::Enabled).await;
