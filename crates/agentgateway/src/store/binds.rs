@@ -594,6 +594,7 @@ pub struct LLMResponsePolicies {
 	pub request_traceparent: Option<HeaderValue>,
 	pub prompt_guard: Vec<ResponseGuard>,
 	pub streaming_prompt_guard_enabled: bool,
+	pub streaming_prompt_guard_mode: llm::policy::PromptGuardStreamingMode,
 }
 
 impl Default for Store {

@@ -3353,7 +3353,7 @@ impl AIProvider {
 		{
 			use policy::PromptGuard;
 			let temp_guard = PromptGuard {
-				streaming: policy::PromptGuardStreamingMode::Enabled,
+				streaming: response_policies.streaming_prompt_guard_mode,
 				request: vec![],
 				response: response_policies.prompt_guard.clone(),
 			};
@@ -3417,7 +3417,12 @@ impl AIProvider {
 			// `logger` is owned by the translated body; pass None to avoid double-logging.
 			return Ok(
 				translated
-					.map(|b| b.transform_stream(|b| GuardedSseBody::new(b, evaluators, buffer, None))),
+					.map(|b| {
+						b.transform_stream(|b| match response_policies.streaming_prompt_guard_mode {
+							policy::PromptGuardStreamingMode::Full => GuardedSseBody::with_full_response(b, evaluators, buffer, None),
+							_ => GuardedSseBody::new(b, evaluators, buffer, None),
+						})
+					}),
 			);
 		}
 		Ok(translated)

@@ -680,6 +680,7 @@ async fn apply_llm_request_policies(
 		request_traceparent: req.headers().get(TRACEPARENT).cloned(),
 		prompt_guard: prompt_guard.map(|g| g.response.clone()).unwrap_or_default(),
 		streaming_prompt_guard_enabled: prompt_guard.is_some_and(|g| g.streaming.is_enabled()),
+		streaming_prompt_guard_mode: prompt_guard.map_or(PromptGuardStreamingMode::Disabled, |g| g.streaming),
 	})
 }
 
@@ -4156,6 +4157,19 @@ mod tests {
 
 		assert_eq!(policies.prompt_guard.len(), 1);
 		assert!(!policies.streaming_prompt_guard_enabled);
+	}
+
+	#[tokio::test]
+	async fn apply_llm_request_policies_preserves_full_streaming_guardrail_mode() {
+		let policies =
+			response_prompt_guards_for_streaming_mode(PromptGuardStreamingMode::Full).await;
+
+		assert_eq!(policies.prompt_guard.len(), 1);
+		assert!(policies.streaming_prompt_guard_enabled);
+		assert_eq!(
+			policies.streaming_prompt_guard_mode,
+			PromptGuardStreamingMode::Full
+		);
 	}
 
 	#[tokio::test]

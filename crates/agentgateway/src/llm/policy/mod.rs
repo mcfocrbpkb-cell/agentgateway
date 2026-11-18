@@ -341,9 +341,12 @@ pub enum PromptGuardStreamingMode {
 	#[default]
 	#[serde(rename = "Disabled")]
 	Disabled,
-	/// Apply prompt guards to streaming responses and realtime websocket messages.
+	/// Apply prompt guards to streaming responses and realtime websocket messages using bounded windows.
 	#[serde(rename = "Enabled")]
 	Enabled,
+	/// Hold the entire translated SSE response until EOF and evaluate all extracted response text before any frame is released.
+	#[serde(rename = "Full")]
+	Full,
 }
 
 impl PromptGuardStreamingMode {
@@ -352,7 +355,11 @@ impl PromptGuardStreamingMode {
 	}
 
 	pub(crate) fn is_enabled(&self) -> bool {
-		*self == Self::Enabled
+		matches!(self, Self::Enabled | Self::Full)
+	}
+
+	pub(crate) fn is_full(&self) -> bool {
+		*self == Self::Full
 	}
 }
 

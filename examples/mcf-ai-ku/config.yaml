@@ -1,0 +1,61 @@
+# MCF AI-KU Agentgateway integration
+
+# Required runtime environment:
+# MCF_CONTROL_PLANE_HOST: reachable HTTPS endpoint for MCF AI-KU.
+# MCF_GATEWAY_SHARED_SECRET: shared secret configured in MCF AI-KU.
+# OPENAI_API_KEY / MCF_OPENAI_MODEL: provider credentials/model selected by MCF governance.
+#
+# This configuration keeps Agentgateway as the native execution/routing plane.
+# MCF is called for admission, hierarchical budget reservation, and response
+# guardrail evaluation. All critical MCF callbacks are fail-closed.
+
+config:
+  readinessAddr: 127.0.0.1:19001
+  statsAddr: 127.0.0.1:19002
+
+frontendPolicies:
+  http:
+    maxBufferSize: 20971520
+
+binds:
+- port: 4000
+  listeners:
+  - name: mcf-ai
+    protocol: HTTP
+    routes:
+    - name: llm
+      backends:
+      - ai:
+          name: mcf-openai
+          provider:
+            openAI:
+              model: $MCF_OPENAI_MODEL
+              apiKey: $OPENAI_API_KEY
+      policies:
+        extAuthz:
+          host: $MCF_CONTROL_PLANE_HOST
+          failureMode: Deny
+          includeRequestBody:
+            maxRequestBytes: 20971520
+            allowPartialMessage: false
+          protocol:
+            http:
+              path: '"/v1/authorize"'
+              addRequestHeaders:
+                content-type: '"application/json"'
+        ai:
+          promptGuard:
+            streaming: Full
+            response:
+            - webhook:
+                action: reject
+                failureMode: failClosed
+                target:
+                  host: $MCF_CONTROL_PLANE_HOST
+                headers:
+                  x-mcf-gateway-secret: '"$MCF_GATEWAY_SHARED_SECRET"'
+                  x-mcf-tenant-id: jwt.mcf.tenant_id
+                  x-mcf-user-id: jwt.sub
+                  x-mcf-project-id: jwt.mcf.project_id
+                  x-mcf-department-id: jwt.mcf.department_id
+                  x-mcf-team-id: jwt.mcf.team_id
