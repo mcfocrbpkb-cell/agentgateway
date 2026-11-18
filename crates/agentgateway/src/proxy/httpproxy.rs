@@ -680,6 +680,7 @@ async fn apply_llm_request_policies(
 		request_traceparent: req.headers().get(TRACEPARENT).cloned(),
 		prompt_guard: prompt_guard.map(|g| g.response.clone()).unwrap_or_default(),
 		streaming_prompt_guard_enabled: prompt_guard.is_some_and(|g| g.streaming.is_enabled()),
+		streaming_prompt_guard_mode: prompt_guard.map_or(PromptGuardStreamingMode::Disabled, |g| g.streaming),
 	})
 }
 
