@@ -768,6 +768,42 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn test_full_response_blocks_pattern_across_late_chunk() {
+		let first = delta_bytes("safe prefix ");
+		let second = delta_bytes("still safe ");
+		let third = delta_bytes("secret payload");
+		let done = sse_bytes("[DONE]");
+		let body = make_body(vec![first, second, third, done]);
+
+		let guarded = GuardedSseBody::with_full_response(
+			body,
+			vec![Box::new(pattern_evaluator("secret payload"))],
+			1024 * 1024,
+			None,
+		);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"secret payload"));
+		assert!(!contains(&bytes, b"safe prefix"));
+	}
+
+	#[tokio::test]
+	async fn test_full_response_blocks_when_buffer_limit_would_be_exceeded() {
+		let body = make_body(vec![delta_bytes("1234567890")]);
+		let guarded = GuardedSseBody::with_full_response(
+			body,
+			vec![Box::new(PassEvaluator)],
+			8,
+			None,
+		);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"1234567890"));
+	}
+
+	#[tokio::test]
 	async fn test_regex_blocks_matching_response() {
 		let chunk = delta_bytes("my SSN is 123-45-6789");
 		let done = sse_bytes("[DONE]");
