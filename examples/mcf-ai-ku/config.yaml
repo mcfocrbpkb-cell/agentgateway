@@ -45,6 +45,7 @@ binds:
                 content-type: '"application/json"'
         ai:
           promptGuard:
+            streaming: Full
             response:
             - webhook:
                 action: reject
