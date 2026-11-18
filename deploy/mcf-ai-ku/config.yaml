@@ -65,9 +65,13 @@ routes:
         # therefore runs on the buffered/non-streaming execution path.
         request:
         - webhook:
-            backendRef:
-              name: mcf-ai-ku-guardrails
-              port: 8443
+            target:
+              host: https://ai-ku.mcf.example
+              policies:
+                backendTLS:
+                  root: /etc/mcf/certs/ai-ku-ca.pem
+                http:
+                  requestTimeout: "5s"
             failureMode: FailClosed
             headers:
               x-user: jwt.sub
@@ -76,9 +80,13 @@ routes:
               ":path": '"/v1/guardrails/request"'
         response:
         - webhook:
-            backendRef:
-              name: mcf-ai-ku-guardrails
-              port: 8443
+            target:
+              host: https://ai-ku.mcf.example
+              policies:
+                backendTLS:
+                  root: /etc/mcf/certs/ai-ku-ca.pem
+                http:
+                  requestTimeout: "5s"
             failureMode: FailClosed
             headers:
               x-user: jwt.sub
