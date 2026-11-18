@@ -249,6 +249,21 @@ impl ResponseDelta {
 		self.reasoning.push_str(&delta.reasoning);
 	}
 
+	fn take_full(&mut self) -> Vec<String> {
+		if self.is_empty() {
+			return Vec::new();
+		}
+		let reasoning = std::mem::take(&mut self.reasoning);
+		let text = std::mem::take(&mut self.text);
+		if reasoning.is_empty() {
+			vec![text]
+		} else if text.is_empty() {
+			vec![reasoning]
+		} else {
+			vec![format!("{reasoning}\n{text}")]
+		}
+	}
+
 	fn take_windows(&mut self, overlap: &mut Self) -> Vec<String> {
 		let mut windows = Vec::new();
 		for (pending, tail) in [
@@ -278,6 +293,7 @@ pin_project! {
 		held_bytes: usize,
 		pending_text: ResponseDelta,
 		overlap_tail: ResponseDelta,
+		full_response: bool,
 		sse_decoder: SseDecoder<Bytes>,
 		decode_buffer: bytes::BytesMut,
 		state: GuardedBodyState,
@@ -328,6 +344,33 @@ impl GuardedSseBody {
 			held_bytes: 0,
 			pending_text: ResponseDelta::default(),
 			overlap_tail: ResponseDelta::default(),
+			full_response: false,
+			sse_decoder: SseDecoder::with_max_size(buffer_limit),
+			decode_buffer: bytes::BytesMut::new(),
+			state: GuardedBodyState::Buffering,
+			logger,
+		})
+	}
+
+	/// Hold all response frames until EOF, evaluate the complete extracted response,
+	/// and only then release the held frames. If the response exceeds `buffer_limit`,
+	/// it is blocked rather than partially released.
+	pub fn with_full_response(
+		inner: agent_http::RawBody,
+		evaluators: Vec<Box<dyn StreamingEvaluator>>,
+		buffer_limit: usize,
+		logger: Option<crate::llm::AmendOnDrop>,
+	) -> agent_http::RawBody {
+		agent_http::RawBody::new(Self {
+			inner,
+			evaluators,
+			eval_threshold: usize::MAX,
+			buffer_limit,
+			held_frames: Vec::new(),
+			held_bytes: 0,
+			pending_text: ResponseDelta::default(),
+			overlap_tail: ResponseDelta::default(),
+			full_response: true,
 			sse_decoder: SseDecoder::with_max_size(buffer_limit),
 			decode_buffer: bytes::BytesMut::new(),
 			state: GuardedBodyState::Buffering,
@@ -479,12 +522,40 @@ impl http_body::Body for GuardedSseBody {
 						Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(e))),
 						Poll::Ready(Some(Ok(frame))) => {
 							let Some(data) = frame.data_ref() else {
+								if *this.full_response {
+									*this.state = GuardedBodyState::Blocked(Bytes::from_static(b"Response exceeds the full-response guardrail buffer"));
+									continue;
+								}
 								return Poll::Ready(Some(Ok(frame)));
 							};
 
 							let raw = data.clone();
+							if *this.full_response && this.held_bytes.saturating_add(raw.len()) > *this.buffer_limit {
+								*this.state = GuardedBodyState::Blocked(Bytes::from_static(b"Response exceeds the full-response guardrail buffer"));
+								continue;
+							}
 							*this.held_bytes += raw.len();
 							this.held_frames.push(raw.clone());
+
+							if *this.full_response {
+								this.decode_buffer.extend_from_slice(&raw);
+								loop {
+									match this.sse_decoder.decode(this.decode_buffer) {
+										Ok(Some(sse_frame)) => {
+											if let Some(delta) = GuardedSseBody::extract_text_delta(sse_frame) {
+												this.pending_text.append(delta);
+											}
+										},
+										Ok(None) => break,
+										Err(e) => {
+											warn!("SSE decode error in full-response guardrail body: {e}");
+											*this.state = GuardedBodyState::Blocked(Bytes::from_static(b"Response could not be safely decoded for full-response guardrail evaluation"));
+											break;
+										},
+									}
+								}
+								continue;
+							}
 
 							this.decode_buffer.extend_from_slice(&raw);
 							loop {
@@ -538,6 +609,20 @@ impl http_body::Body for GuardedSseBody {
 										break;
 									},
 								}
+							}
+
+							if *this.full_response {
+								if this.pending_text.is_empty() {
+									let queue: VecDeque<Bytes> = this.held_frames.drain(..).collect();
+									*this.held_bytes = 0;
+									*this.state = GuardedBodyState::Flushing { queue, eof: true };
+									continue;
+								}
+								let windows = this.pending_text.take_full();
+								let evaluators = std::mem::take(this.evaluators);
+								let fut: EvalFuture = Box::pin(evaluate_windows(evaluators, windows));
+								*this.state = GuardedBodyState::Evaluating { fut, eof: true };
+								continue;
 							}
 
 							if this.pending_text.is_empty() {
