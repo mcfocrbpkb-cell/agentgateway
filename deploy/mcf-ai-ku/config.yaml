@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# MCF AI-KU enterprise integration baseline.
+# This layers MCF governance on top of native Agentgateway capabilities.
+#
+# Replace ai-ku.mcf.example and certificate paths with MCF-approved values.
+
+llm:
+  policies:
+    jwtAuth:
+      mode: strict
+      issuer: https://ai-ku.mcf.example/
+      audiences:
+      - mcf-ai-ku
+      jwks:
+        url: https://ai-ku.mcf.example/.well-known/jwks.json
+
+    extAuthz:
+      host: ai-ku.mcf.example:443
+      failureMode: failClosed
+      forwardBody:
+        maxSize: 64Ki
+      policies:
+        backendTLS:
+          hostname: ai-ku.mcf.example
+          root: /etc/mcf/certs/ai-ku-ca.pem
+        backendAuth:
+          credentials:
+          - location:
+              header:
+                name: x-mcf-governance-key
+            key:
+              file: /etc/mcf/secrets/mcf-gateway-api-key
+        http:
+          requestTimeout: "5s"
+      includeRequestHeaders:
+      - authorization
+      - x-mcf-project-id
+      - x-mcf-department-id
+      - x-mcf-team-id
+      protocol:
+        http:
+          path: '"/v1/authorize"'
+          addRequestHeaders:
+            authorization: '"Bearer " + jwt.rawToken.unredacted()'
+            x-mcf-gateway: '"agentgateway"'
+            x-user: jwt.sub
+            x-tenant: jwt.mcf.tenant_id
+          allowedResponseHeaders:
+          - x-mcf-decision-id
+          - x-mcf-policy-version
+
+  models:
+  - name: "*"
+    provider: openAI
+    params:
+      model: gpt-4o-mini
+      apiKey: "$OPENAI_API_KEY"
+
+    guardrails:
+      # MCF custom guardrails are fail-closed.
+      # Strict full-response inspection uses the non-streaming execution path.
+      # Native streaming remains available when strict full-response inspection
+      # is not required by the effective MCF policy.
+      request:
+      - webhook:
+          target:
+            host: https://ai-ku.mcf.example
+            policies:
+              backendTLS:
+                root: /etc/mcf/certs/ai-ku-ca.pem
+              backendAuth:
+                credentials:
+                - location:
+                    header:
+                      name: x-mcf-governance-key
+                  key:
+                    file: /etc/mcf/secrets/mcf-gateway-api-key
+              http:
+                requestTimeout: "5s"
+          failureMode: failClosed
+          headers:
+            x-user: jwt.sub
+            x-tenant: jwt.mcf.tenant_id
+            x-mcf-gateway: '"agentgateway"'
+            x-mcf-project-id: request.headers["x-mcf-project-id"]
+            x-mcf-department-id: request.headers["x-mcf-department-id"]
+            x-mcf-team-id: request.headers["x-mcf-team-id"]
+            ":path": '"/v1/guardrails/request"'
+      response:
+      - webhook:
+          target:
+            host: https://ai-ku.mcf.example
+            policies:
+              backendTLS:
+                root: /etc/mcf/certs/ai-ku-ca.pem
+              backendAuth:
+                credentials:
+                - location:
+                    header:
+                      name: x-mcf-governance-key
+                  key:
+                    file: /etc/mcf/secrets/mcf-gateway-api-key
+              http:
+                requestTimeout: "5s"
+          failureMode: failClosed
+          headers:
+            x-user: jwt.sub
+            x-tenant: jwt.mcf.tenant_id
+            x-mcf-gateway: '"agentgateway"'
+            x-mcf-project-id: request.headers["x-mcf-project-id"]
+            x-mcf-department-id: request.headers["x-mcf-department-id"]
+            x-mcf-team-id: request.headers["x-mcf-team-id"]
+            ":path": '"/v1/guardrails/response"'
